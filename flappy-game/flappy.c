@@ -39,7 +39,7 @@ typedef struct Pipe {
 
 Bird *bird;
 Pipe *pipes;
-bool has_collision = true;
+int has_collision = 1;
 int best;
 int idle_time = 30;
 float frame = 0;
@@ -106,7 +106,7 @@ Pipe *create_pipe(int x)
 }
 
 void debug_set_no_collision() {
-        has_collision = false;
+        has_collision = 0;
 }
 
 void update_bird_position(Bird *bird, float y, float vel) {
@@ -174,7 +174,7 @@ void new_game(int *score)
 //when we hit something
 void collision(int *score)
 {
-        if (has_collision == true)
+        if (has_collision)
         {
                 set_game_over();
                 idle_time = 0;
