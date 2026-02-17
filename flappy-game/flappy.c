@@ -39,7 +39,7 @@ typedef struct Pipe {
 
 Bird *bird;
 Pipe *pipes;
-
+int has_collision = 1;
 int best;
 int idle_time = 30;
 float frame = 0;
@@ -54,13 +54,13 @@ TTF_Font *font;
 
 void setup();
 void new_game(int *score);
-void update_stuff(int *score, int *has_collision);
-void update_pipe(Pipe *p, int *score, int *has_collision);
+void update_stuff(int *score);
+void update_pipe(Pipe *p, int *score);
 void draw_stuff(int *score);
 void text(char *fstr, int value, int height);
 void increment_score(int *score);
 Pipe *create_pipe(int x);
-void debug_set_no_collision(int *has_collision);
+void debug_set_no_collision();
 void update_bird_position(Bird *bird, float, float);
 void set_game_over();
 
@@ -68,7 +68,6 @@ void set_game_over();
 int main()
 {
         int score;
-        int has_collision = 1;
         setup();
 
         for(;;)
@@ -90,7 +89,7 @@ int main()
                                 }
                 }
 
-                update_stuff(&score, &has_collision);
+                update_stuff(&score);
                 draw_stuff(&score);
                 SDL_Delay(1000 / 60);
                 idle_time++;
@@ -106,8 +105,8 @@ Pipe *create_pipe(int x)
         return p;
 }
 
-void debug_set_no_collision(int *has_collision) {
-        *has_collision = 0;
+void debug_set_no_collision() {
+        has_collision = 0;
 }
 
 void update_bird_position(Bird *bird, float y, float vel) {
@@ -173,7 +172,7 @@ void new_game(int *score)
 }
 
 //when we hit something
-void collision(int *score, int *has_collision)
+void collision(int *score)
 {
         if (has_collision)
         {
@@ -185,7 +184,7 @@ void collision(int *score, int *has_collision)
 }
 
 //update everything that needs to update on its own, without input
-void update_stuff(int *score, int *has_collision)
+void update_stuff(int *score)
 {
         if(gamestate != ALIVE) return;
 
@@ -198,7 +197,7 @@ void update_stuff(int *score, int *has_collision)
 
         if(bird->y > H - GROUND - PLYR_SZ)
         {
-                collision(score, has_collision);
+                collision(score);
                 bird->y = H - GROUND - PLYR_SZ; //keep bird on floor when no collision
         }
                 
@@ -207,7 +206,7 @@ void update_stuff(int *score, int *has_collision)
         while (p) 
         {       
                 Pipe *next = p->next;
-                update_pipe(p, score, has_collision);
+                update_pipe(p, score);
                 p = next;
         }
 }
@@ -217,11 +216,11 @@ void increment_score(int *score) {
 }
 
 //update one pipe for one frame
-void update_pipe(Pipe *p, int *score, int *has_collision)
+void update_pipe(Pipe *p, int *score)
 {
         if(PLYR_X + PLYR_SZ >= p->x + GRACE && PLYR_X <= p->x + PIPE_W - GRACE &&
                 (bird->y <= p->y - GRACE || bird->y + PLYR_SZ >= p->y + GAP + GRACE))
-                collision(score, has_collision); // player hit pipe
+                collision(score); // player hit pipe
 
         // move pipes and increment score if we just passed one
         p->x -= 5;
