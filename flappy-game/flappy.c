@@ -30,7 +30,6 @@ float player_y = (H - GROUND)/2;
 float player_vel;
 int pipe_x[2] = {W, W};
 float pipe_y[2];
-int score;
 int best;
 int idle_time = 30;
 float frame = 0;
@@ -44,15 +43,17 @@ SDL_Texture *bird[4];
 TTF_Font *font;
 
 void setup();
-void new_game();
-void update_stuff();
-void update_pipe(int i);
-void draw_stuff();
+void new_game(int *score);
+void update_stuff(int *score);
+void update_pipe(int i, int *score);
+void draw_stuff(int *score);
 void text(char *fstr, int value, int height);
+void increment_score(int *score);
 
 //the entry point and main game loop
 int main()
 {
+        int score;
         setup();
 
         for(;;)
@@ -70,12 +71,12 @@ int main()
                                 }
                                 else if(idle_time > 30)
                                 {
-                                        new_game();
+                                        new_game(&score);
                                 }
                 }
 
-                update_stuff();
-                draw_stuff();
+                update_stuff(&score);
+                draw_stuff(&score);
                 SDL_Delay(1000 / 60);
                 idle_time++;
         }
@@ -111,12 +112,12 @@ void setup()
 }
 
 //start a new game
-void new_game()
+void new_game(int *score)
 {
         gamestate = ALIVE;
         player_y = (H - GROUND)/2;
         player_vel = -11.7f;
-        score = 0;
+        *score = 0;
         pipe_x[0] = PHYS_W + PHYS_W/2 - PIPE_W;
         pipe_x[1] = PHYS_W - PIPE_W;
         pipe_y[0] = RANDOM_PIPE_HEIGHT;
@@ -124,15 +125,15 @@ void new_game()
 }
 
 //when we hit something
-void game_over()
+void game_over(int *score)
 {
         gamestate = GAMEOVER;
         idle_time = 0;
-        if(best < score) best = score;
+        if(best < *score) best = *score;
 }
 
 //update everything that needs to update on its own, without input
-void update_stuff()
+void update_stuff(int *score)
 {
         if(gamestate != ALIVE) return;
 
@@ -145,23 +146,28 @@ void update_stuff()
                 frame -= (player_vel - 10.0f) * 0.03f; //fancy animation
 
         if(player_y > H - GROUND - PLYR_SZ)
-                game_over();
+                game_over(score);
 
         for(int i = 0; i < 2; i++)
-                update_pipe(i);
+                update_pipe(i, score);
+}
+
+void increment_score(int *score) {
+        *score = *score + 1;
 }
 
 //update one pipe for one frame
-void update_pipe(int i)
+void update_pipe(int i,int *score)
 {
         if(PLYR_X + PLYR_SZ >= pipe_x[i] + GRACE && PLYR_X <= pipe_x[i] + PIPE_W - GRACE &&
                 (player_y <= pipe_y[i] - GRACE || player_y + PLYR_SZ >= pipe_y[i] + GAP + GRACE))
-                game_over(); // player hit pipe
+                game_over(score); // player hit pipe
 
         // move pipes and increment score if we just passed one
         pipe_x[i] -= 5;
         if(pipe_x[i] + PIPE_W < PLYR_X && pipe_x[i] + PIPE_W > PLYR_X - 5)
-                score++;
+                increment_score(score);
+                
 
         // respawn pipe once far enough off screen
         if(pipe_x[i] <= -PIPE_W)
@@ -172,7 +178,7 @@ void update_pipe(int i)
 }
 
 //draw everything in the game on the screen
-void draw_stuff()
+void draw_stuff(int *score)
 {
         SDL_FRect dest = {0, 0, W, H};
         SDL_RenderTexture(renderer, background, NULL, &dest);
@@ -190,7 +196,7 @@ void draw_stuff()
         SDL_RenderTexture(renderer, bird[(int)frame % 4], NULL,
                         &(SDL_FRect){PLYR_X, player_y, PLYR_SZ, PLYR_SZ});
 
-        if (gamestate != READY) text("%d", score, 10);
+        if (gamestate != READY) text("%d", *score, 10);
         if (gamestate == GAMEOVER) text("High score: %d", best, 170);
         if (gamestate == READY || gamestate == GAMEOVER) text("Press any key", 0, 240);
 
