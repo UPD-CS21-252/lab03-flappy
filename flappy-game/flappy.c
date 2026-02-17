@@ -59,7 +59,7 @@ void update_pipe(Pipe *p, int *score);
 void draw_stuff(int *score);
 void text(char *fstr, int value, int height);
 void increment_score(int *score);
-
+Pipe *create_pipe(int x);
 
 //the entry point and main game loop
 int main()
@@ -93,6 +93,15 @@ int main()
         }
 }
 
+Pipe *create_pipe(int x)
+{
+        Pipe *p = (Pipe *)malloc(sizeof(Pipe));
+        p->x = x;
+        p->y = RANDOM_PIPE_HEIGHT;
+        p->next = NULL;
+        return p;
+}
+
 //initial setup to get the window and rendering going
 void setup()
 {
@@ -103,14 +112,8 @@ void setup()
         bird->y = (H - GROUND)/2;
         bird->vel = 0;
 
-        pipes = (Pipe *)malloc(sizeof(Pipe));
-        pipes->next = (Pipe *)malloc(sizeof(Pipe));
-
-        pipes->x = W;
-        pipes->y = 0;
-        pipes->next->x = W;
-        pipes->next->y = 0;
-        pipes->next->next = NULL;
+        pipes = create_pipe(W);
+        pipes->next = create_pipe(W);
 
         SDL_Init(SDL_INIT_VIDEO);
         SDL_Window *win = SDL_CreateWindow("Flappy", W, H, 0);
@@ -143,10 +146,15 @@ void new_game(int *score)
         bird->y = (H - GROUND)/2;
         bird->vel = -11.7f;
         *score = 0;
-        pipes->x = PHYS_W + PHYS_W/2 - PIPE_W;
-        pipes->y = RANDOM_PIPE_HEIGHT;
-        pipes->next->x = PHYS_W - PIPE_W;
-        pipes->next->y = RANDOM_PIPE_HEIGHT;
+        Pipe *p = pipes;
+        while (p)
+        {
+                Pipe *next = p->next;
+                free(p);
+                p = next;
+        }
+        pipes = create_pipe(PHYS_W + PHYS_W/2 - PIPE_W);
+        pipes->next = create_pipe(PHYS_W - PIPE_W);
 }
 
 //when we hit something
@@ -173,8 +181,13 @@ void update_stuff(int *score)
         if(bird->y > H - GROUND - PLYR_SZ)
                 game_over(score);
 
-        for(Pipe *p = pipes; p != NULL; p = p->next)
+        Pipe *p = pipes;
+        while (p) 
+        {       
+                Pipe *next = p->next;
                 update_pipe(p, score);
+                p = next;
+        }
 }
 
 void increment_score(int *score) {
@@ -196,8 +209,37 @@ void update_pipe(Pipe *p, int *score)
         // respawn pipe once far enough off screen
         if(p->x <= -PIPE_W)
         {
-                p->x = PHYS_W - PIPE_W;
-                p->y = RANDOM_PIPE_HEIGHT;
+        
+        //find prev pipe to remove
+        Pipe *prev = pipes;
+        
+        
+        while (prev && prev->next != p)
+        {
+                prev = prev->next;
+        }
+
+        //remove current pipe from list
+        if (prev)
+        {
+                prev->next = p->next;
+        }
+        else
+        {
+                pipes = p->next;
+        }
+
+        //add new pipe at the end of the list
+        Pipe *last = pipes;
+        //printf("cur:  %p\n", (void*)last); //debug prints
+        while (last && last->next)
+        {
+                last = last->next;
+        }
+        last->next = create_pipe(PHYS_W - PIPE_W);
+        //printf("next: %p\n", (void*)last->next); //debug prints
+        //free old pipe
+        free(p);
         }
 }
 
@@ -208,12 +250,14 @@ void draw_stuff(int *score)
         SDL_RenderTexture(renderer, background, NULL, &dest);
 
         //draw pipes via linked list
-        for(Pipe *p = pipes; p != NULL; p = p->next)
+        Pipe *p = pipes;
+        while (p)
         {
                 int lower = p->y + GAP;
                 SDL_RenderTexture(renderer, pillar, NULL, &(SDL_FRect){p->x, p->y - H, PIPE_W, H});
                 SDL_FRect src = {0, 0, 86, H - lower - GROUND};
                 SDL_RenderTexture(renderer, pillar, &src, &(SDL_FRect){p->x, lower, PIPE_W, src.h});
+                p = p->next;
         }
 
         //draw player
