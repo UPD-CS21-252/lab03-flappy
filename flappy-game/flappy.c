@@ -26,10 +26,20 @@
 
 enum gamestates {READY, ALIVE, GAMEOVER} gamestate = READY;
 
-float player_y = (H - GROUND)/2;
-float player_vel;
-int pipe_x[2] = {W, W};
-float pipe_y[2];
+typedef struct {
+    float y;
+    float vel;
+} Bird;
+
+typedef struct Pipe {
+    int x;
+    float y;
+    struct Pipe *next; //linked list
+} Pipe;
+
+Bird *bird;
+Pipe *pipes;
+
 int best;
 int idle_time = 30;
 float frame = 0;
@@ -39,16 +49,17 @@ SDL_Renderer *renderer;
 SDL_Surface *surf;
 SDL_Texture *pillar;
 SDL_Texture *background;
-SDL_Texture *bird[4];
+SDL_Texture *bird_texture[4]; //naming conflict
 TTF_Font *font;
 
 void setup();
 void new_game(int *score);
 void update_stuff(int *score);
-void update_pipe(int i, int *score);
+void update_pipe(Pipe *p, int *score);
 void draw_stuff(int *score);
 void text(char *fstr, int value, int height);
 void increment_score(int *score);
+
 
 //the entry point and main game loop
 int main()
@@ -66,7 +77,7 @@ int main()
                         case SDL_EVENT_MOUSE_BUTTON_DOWN:
                                 if(gamestate == ALIVE)
                                 {
-                                        player_vel = -11.7f;
+                                        bird->vel = -11.7f;
                                         frame += 1.0f;
                                 }
                                 else if(idle_time > 30)
@@ -87,6 +98,20 @@ void setup()
 {
         srand(time(NULL));
 
+        //allocate with malloc
+        bird = (Bird *)malloc(sizeof(Bird));
+        bird->y = (H - GROUND)/2;
+        bird->vel = 0;
+
+        pipes = (Pipe *)malloc(sizeof(Pipe));
+        pipes->next = (Pipe *)malloc(sizeof(Pipe));
+
+        pipes->x = W;
+        pipes->y = 0;
+        pipes->next->x = W;
+        pipes->next->y = 0;
+        pipes->next->next = NULL;
+
         SDL_Init(SDL_INIT_VIDEO);
         SDL_Window *win = SDL_CreateWindow("Flappy", W, H, 0);
         renderer = SDL_CreateRenderer(win, NULL);
@@ -104,7 +129,7 @@ void setup()
                 sprintf(file, TINYC_DIR "/flappy-game/assets/bird-%d.bmp", i);
                 surf = SDL_LoadBMP(file);
                 SDL_SetSurfaceColorKey(surf, 1, 0xffff00);
-                bird[i] = SDL_CreateTextureFromSurface(renderer, surf);
+                bird_texture[i] = SDL_CreateTextureFromSurface(renderer, surf);
         }
 
         TTF_Init();
@@ -115,13 +140,13 @@ void setup()
 void new_game(int *score)
 {
         gamestate = ALIVE;
-        player_y = (H - GROUND)/2;
-        player_vel = -11.7f;
+        bird->y = (H - GROUND)/2;
+        bird->vel = -11.7f;
         *score = 0;
-        pipe_x[0] = PHYS_W + PHYS_W/2 - PIPE_W;
-        pipe_x[1] = PHYS_W - PIPE_W;
-        pipe_y[0] = RANDOM_PIPE_HEIGHT;
-        pipe_y[1] = RANDOM_PIPE_HEIGHT;
+        pipes->x = PHYS_W + PHYS_W/2 - PIPE_W;
+        pipes->y = RANDOM_PIPE_HEIGHT;
+        pipes->next->x = PHYS_W - PIPE_W;
+        pipes->next->y = RANDOM_PIPE_HEIGHT;
 }
 
 //when we hit something
@@ -137,19 +162,19 @@ void update_stuff(int *score)
 {
         if(gamestate != ALIVE) return;
 
-        player_y += player_vel;
-        player_vel += 0.61; // gravity
+        bird->y += bird->vel;
+        bird->vel += 0.61f; // gravity
 
-        if(player_vel > 10.0f)
+        if(bird->vel > 10.0f)
                 frame = 0;
         else
-                frame -= (player_vel - 10.0f) * 0.03f; //fancy animation
+                frame -= (bird->vel - 10.0f) * 0.03f; //fancy animation
 
-        if(player_y > H - GROUND - PLYR_SZ)
+        if(bird->y > H - GROUND - PLYR_SZ)
                 game_over(score);
 
-        for(int i = 0; i < 2; i++)
-                update_pipe(i, score);
+        for(Pipe *p = pipes; p != NULL; p = p->next)
+                update_pipe(p, score);
 }
 
 void increment_score(int *score) {
@@ -157,23 +182,22 @@ void increment_score(int *score) {
 }
 
 //update one pipe for one frame
-void update_pipe(int i,int *score)
+void update_pipe(Pipe *p, int *score)
 {
-        if(PLYR_X + PLYR_SZ >= pipe_x[i] + GRACE && PLYR_X <= pipe_x[i] + PIPE_W - GRACE &&
-                (player_y <= pipe_y[i] - GRACE || player_y + PLYR_SZ >= pipe_y[i] + GAP + GRACE))
+        if(PLYR_X + PLYR_SZ >= p->x + GRACE && PLYR_X <= p->x + PIPE_W - GRACE &&
+                (bird->y <= p->y - GRACE || bird->y + PLYR_SZ >= p->y + GAP + GRACE))
                 game_over(score); // player hit pipe
 
         // move pipes and increment score if we just passed one
-        pipe_x[i] -= 5;
-        if(pipe_x[i] + PIPE_W < PLYR_X && pipe_x[i] + PIPE_W > PLYR_X - 5)
+        p->x -= 5;
+        if(p->x + PIPE_W < PLYR_X && p->x + PIPE_W > PLYR_X - 5)
                 increment_score(score);
-                
 
         // respawn pipe once far enough off screen
-        if(pipe_x[i] <= -PIPE_W)
+        if(p->x <= -PIPE_W)
         {
-                pipe_x[i] = PHYS_W - PIPE_W;
-                pipe_y[i] = RANDOM_PIPE_HEIGHT;
+                p->x = PHYS_W - PIPE_W;
+                p->y = RANDOM_PIPE_HEIGHT;
         }
 }
 
@@ -183,18 +207,18 @@ void draw_stuff(int *score)
         SDL_FRect dest = {0, 0, W, H};
         SDL_RenderTexture(renderer, background, NULL, &dest);
 
-        //draw pipes
-        for(int i = 0; i < 2; i++)
+        //draw pipes via linked list
+        for(Pipe *p = pipes; p != NULL; p = p->next)
         {
-                int lower = pipe_y[i] + GAP;
-                SDL_RenderTexture(renderer, pillar, NULL, &(SDL_FRect){pipe_x[i], pipe_y[i] - H, PIPE_W, H});
+                int lower = p->y + GAP;
+                SDL_RenderTexture(renderer, pillar, NULL, &(SDL_FRect){p->x, p->y - H, PIPE_W, H});
                 SDL_FRect src = {0, 0, 86, H - lower - GROUND};
-                SDL_RenderTexture(renderer, pillar, &src, &(SDL_FRect){pipe_x[i], lower, PIPE_W, src.h});
+                SDL_RenderTexture(renderer, pillar, &src, &(SDL_FRect){p->x, lower, PIPE_W, src.h});
         }
 
         //draw player
-        SDL_RenderTexture(renderer, bird[(int)frame % 4], NULL,
-                        &(SDL_FRect){PLYR_X, player_y, PLYR_SZ, PLYR_SZ});
+        SDL_RenderTexture(renderer, bird_texture[(int)frame % 4], NULL,
+                        &(SDL_FRect){PLYR_X, bird->y, PLYR_SZ, PLYR_SZ});
 
         if (gamestate != READY) text("%d", *score, 10);
         if (gamestate == GAMEOVER) text("High score: %d", best, 170);
